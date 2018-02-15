@@ -20,14 +20,14 @@ _Side note:  Are you just doing an internal tool or a learning project?  Then st
 
 In advanced optimization mode, the Google Closure Compiler alters symbols in javascript code in order to get maximum minification. This is apparently important because the generated cljs code creates incredibly long function names.
 
-Here's the problem. If you access a javascript library like this: `(.method LibraryObject),` Closure Compiler will come around an minify the `method` symbol and then you'll get a runtime error message like "Cannot read property 'q29' of null". Why? Because Closure Compiler doesn't optimize the external library but it _does_ optimize the cljs code. 
+Here's the problem. If you access a javascript library like this: `(.method LibraryObject),` Closure Compiler will come around an minify the `method` symbol and then you'll get a runtime error message like "Cannot read property 'q29' of null". Why? Because Closure Compiler doesn't optimize the external library but it _does_ optimize the cljs code.
 
 1. Note: theoretically some javascript libraries are safe to be run through closure advanced optimizations, but in practice, it seems like virtually nothing you'll want to use is.
 2. Note: automated e
 
 ### The "externs" file and cljsjs
 
-The traditional solution is to create an "externs" file that contain symbols the Closure Compiler should _not_ alter. Note, this affects compilation not of the external library, but of the cljs code. \(This was initially confusing to me because the externs feel "attached" to the foreign library.\) So when you write `js/LibraryObject.method`, the `LibaryObject.method` symbol in the compiled cljs code will remain untouched by the advanced optimizer, provided that it is properly declared in the extern files. There is a feature called 
+The traditional solution is to create an "externs" file that contain symbols the Closure Compiler should _not_ alter. Note, this affects compilation not of the external library, but of the cljs code. \(This was initially confusing to me because the externs feel "attached" to the foreign library.\) So when you write `js/LibraryObject.method`, the `LibaryObject.method` symbol in the compiled cljs code will remain untouched by the advanced optimizer, provided that it is properly declared in the extern files. Note, the cljs compiler has a feature called automated externs inference now, which, when turned on, will automatically avoid changing simple examples like this, but there are other instances where it cannot make the inference, so we have the same problem.
 
 The [cljsjs project](https://github.com/cljsjs/packages) has a bunch of libraries that other people have created externs for. These packages also contain `deps.cljs` files, which are little pieces of metadata that instruct the compiler how to load the javascript code and enable you to use a normal namespace when accessing the library \(e.g. `react/createElement`\).
 
@@ -56,12 +56,12 @@ The shadow guide is thorough, but here is a taste of how it works:
 Use `npm` or `yarn` and install the package normally. Shadow-cljs will look at the `node_modules` directory and examine the information in `package.json` for each module. The module can usually be used directly in your cljs code like so:
 
 ```clojure
-  (:require ["react-dnd" :as react-dnd :refer DropTarget]))
+  (:require ["react-dnd" :as react-dnd :refer (DropTarget)]))
 ```
 
-* Note: the extensions to `ns.`npm modules can be imported using the same string name that you would use if you were doing an `import FlipMove from "react-flip-move"` in javascript.
+* Note: npm modules can be imported using the same string name that you would use if you were doing an `import FlipMove from "react-flip-move"` in javascript.  \(You can also just use the symbol name `react-flip-move` which I prefer because my linter doesn't know about the string syntax.\)
 
-* Note: shadow-cljs supports every conceivable type of es6 import syntax, including default imports. This makes translation from javascript examples and documentation easy.  See more [here](https://shadow-cljs.github.io/docs/UsersGuide.html#_using_npm_packages).
+* Note: shadow-cljs supports every conceivable type of es6 import syntax, including default imports. This makes translation from javascript examples and documentation easy.  See more [here](https://shadow-cljs.github.io/docs/UsersGuide.html#_using_npm_packages).  \(It allows a `:default` keyword that is technically an extension to the allowed syntax.\)
 
 ##### Figwheel replacement
 
@@ -90,7 +90,8 @@ With a few lines of config, you get hot code reloading and a heads up display, j
 
 A few pointers:
 
-1. The `:devtools` section sets up the equivalent of figwheel. Note the `:after-load` entry point: this is what shadow-cljs will call when it hot reloads new code. Typically, you will just remount the root element in your reagent project, or the equivalent if you are using a different library. Shadow-cljs gives you other hooks so that you can do things such as restarting webworkers.  Either clone or poke around [this repo](https://github.com/lauritzsh/reagent-shadow-cljs-starter) for an example.
+1. The `:devtools` section sets up the equivalent of figwheel. Note the `:after-load` entry point: this is what shadow-cljs will call when it hot reloads new code. Typically, you will just remount the root element in your reagent project, or the equivalent if you are using a different library. 
+2. Shadow-cljs gives you other hooks so that you can do things such as restarting webworkers.  Either clone or poke around [this repo](https://github.com/lauritzsh/reagent-shadow-cljs-starter) for an example.
 
 ##### Minification, bundling, and selective imports
 
@@ -100,7 +101,7 @@ One advantage of supporting the full es6 import syntax is that some libraries ar
 
 ##### Rough spots
 
-Shadow-cljs still isn't 100% perfect on all modules.  Occasionally you have to give it a hint as to which file in the distribution it should use.  For example, if you want to use the es6 style import statements with the `react-flip-move` package, you need to tell shadow-cljs which of the handful of distributions it ships with to use:
+So far, I found that we had to give a hint to the compiler when doing a es6 style default import statements with the `react-flip-move` package, because it was picking up the wrong distributed entry point.  All we had to do, though, was tell shadow-cljs which of the handful of distributions it ships with to use:
 
 ```
 :js-options {:resolve {"react-flip-move"
@@ -108,7 +109,7 @@ Shadow-cljs still isn't 100% perfect on all modules.  Occasionally you have to g
                                  :require "react-flip-move/dist/react-flip-move.es"}}}}}
 ```
 
-In at least one case, the `ns` extensions will break tooling that depends on parsing those forms \(in my case, using `joker` as a linter\).  You can usually rewrite the `ns` forms in such a was as to avoid the extensions \(such as using symbols instead of strings\).
+In at least one case, the `ns` extensions will break tooling that depends on parsing those forms \(in my case, using `joker` as a linter\).  I have usually been able to write the `ns` forms in such a was as to avoid the extensions \(such as using symbols instead of strings\).
 
 The compiler is under active development so if you run into trouble you can get help and get fix if needed surprisingly fast.
 
