@@ -6,14 +6,17 @@ An opinionated guide.
 
 Reccommended approaches in decreasing order of developer convenience:
 
-1. Never do any cljs advanced optimizations. Include your libraries using `<script>` tags. Access methods and properties of the javascript library using the `js/` accessor. There are obvious performance downsides to this approach, but it may be all you need.  I don't describe this more below, but it is worth mentioning if you are just doing an internal tool or a school project.
-2. Replace your lein/cljs build with shadow-cljs. Install your libraries using npm or yarn. Import them directly into your source code. I recommend this approach if at all possible, but existing projects with complex builds may find this difficult.  More below.
-3. Use the normal cljs compiler. Find a UMD build from the npm distribution of your library, or create one using webpack if one does not exist. Import it using `:foreign-libs`. Exclusively use `cljs-oops` to access members and functions. Never use the `js/` accessors.  More on this below.
+1. Replace your lein/cljs build with shadow-cljs. Install your libraries using npm or yarn. Import them directly into your source code. I recommend this approach if at all possible, but existing projects with complex builds may find this difficult.  More below.
+2. Use the normal cljs compiler. Find a UMD build from the npm distribution of your library, or create one using webpack if one does not exist. Import it using `:foreign-libs`. Exclusively use `cljs-oops` to access members and functions. Never use the `js/` accessors.  More on this below.
 
 Unreccomended approaches:
 
 1. Use the normal cljs compiler. Hope that a `cljsjs` version of your library exists and use it like a normal cljs library. Hope the author wrapped it properly. Hope they do an update when a new version comes out. If not, create your own externs file either manually or with the automatic externs tool. Be a nice person and submit a pull request to the cljsjs project.
 2. Use the `:npm-deps` feature of the cljs compiler. I used it once. It broke with a perplexing error message. There was no way to debug it and nobody on slack ever seems to have answers about it. Although the documentation is clear that this feature is not expected to work all the time, it doesn't say when that might happen or what you are supposed to do about it.
+
+Side note:
+
+Are you just doing an internal tool or a learning project?  Then stop reading this guide.  Just never do any cljs advanced optimizations. Include your libraries using `<script>` tags. Access methods and properties of the javascript library using the `js/` accessor. There are obvious performance downsides to this approach, but it is all you need.
 
 ## The problem we are trying to solve
 
@@ -31,7 +34,7 @@ Problem: what if your library isn't there? What if it is there but it's the wron
 
 ## Shadow-cljs
 
-[Shadow-cljs](https://shadow-cljs.github.io/docs/UsersGuide.html) is a fork of the main cljs-compiler that allows you to simply install modules using `npm` or `yarn` and just used them. It is primarily a build tool, so aside from some extensions to the `ns` form, it doesn't impact your code much. It accepts a strict superset of cljs code.
+[Shadow-cljs](https://shadow-cljs.github.io/docs/UsersGuide.html) is a fork of the main cljs-compiler adds some dependency management and other conveniences.  With it, you can install modules using `npm` or `yarn` and use them as is. It is primarily a build tool, so aside from some extensions to the `ns` form, it doesn't impact your code. It accepts a strict superset of cljs code.
 
 Shadow-cljs will replace:
 
@@ -50,13 +53,12 @@ The shadow guide is thorough, but here is a taste of how it works:
 Use `npm` or `yarn` and install the package normally. Shadow-cljs will look at the `node_modules` directory and examine the information in `package.json` for each module. The module can usually be used directly in your cljs code like so:
 
 ```clojure
-  (:require [reagent.core :as reagent]
-            ["react-dnd" :as react-dnd :refer DropTarget]))
+  (:require ["react-dnd" :as react-dnd :refer DropTarget]))
 ```
 
 * Note: the extensions to `ns.`npm modules can be imported using the same string name that you would use if you were doing an `import FlipMove from "react-flip-move"` in javascript.
 
-* Note: shadow-cljs supports every conceivable type of es6 import syntax, including default imports. See more [here](https://shadow-cljs.github.io/docs/UsersGuide.html#_using_npm_packages).
+* Note: shadow-cljs supports every conceivable type of es6 import syntax, including default imports. This makes translation from javascript examples and documentation easy.  See more [here](https://shadow-cljs.github.io/docs/UsersGuide.html#_using_npm_packages).
 
 ##### Figwheel replacement
 
@@ -87,6 +89,12 @@ A few pointers:
 
 1. The `:devtools` section sets up the equivalent of figwheel. Note the `:after-load` entry point: this is what shadow-cljs will call when it hot reloads new code. Typically, you will just remount the root element in your reagent project, or the equivalent if you are using a different library. Shadow-cljs gives you other hooks so that you can do things such as restarting webworkers.  Either clone or poke around [this repo](https://github.com/lauritzsh/reagent-shadow-cljs-starter) for an example.
 
+##### Minification, bundling, and selective imports
+
+Shadow-cljs kind of operates like webpack for you.  It will bundle and perform safe minifications on all your javascript libraries.  On slack, I saw one project that ported to shadow-cljs and saw big improvements in bundle size without doing anything.
+
+One advantage of supporting the full es6 import syntax is that some libraries are built with components that can be imported individually \(e.g. material-ui\).  You can potentially see big improvements in code size just because of this feature.
+
 ##### Rough spots
 
 Shadow-cljs still isn't 100% perfect on all modules.  Occasionally you have to give it a hint as to which file in the distribution it should use.  For example, if you want to use the es6 style import statements with the `react-flip-move` package, you need to tell shadow-cljs which of the handful of distributions it ships with to use:
@@ -98,6 +106,8 @@ Shadow-cljs still isn't 100% perfect on all modules.  Occasionally you have to g
 ```
 
 In at least one case, the `ns` extensions will break tooling that depends on parsing those forms \(in my case, using `joker` as a linter\).  You can usually rewrite the `ns` forms in such a was as to avoid the extensions \(such as using symbols instead of strings\).
+
+The compiler is under active development so if you run into trouble you can get help and get fix if needed surprisingly fast.
 
 ##### Summary
 
@@ -112,14 +122,14 @@ The first step is to find a UMD build of your package.  Typically, you can just 
 ```js
 $ head ReactDnD.js
 (function webpackUniversalModuleDefinition(root, factory) {
-	if(typeof exports === 'object' && typeof module === 'object')
-		module.exports = factory(require("react"));
-	else if(typeof define === 'function' && define.amd)
-		define(["react"], factory);
-	else if(typeof exports === 'object')
-		exports["ReactDnD"] = factory(require("react"));
-	else
-		root["ReactDnD"] = factory(root["React"]);
+    if(typeof exports === 'object' && typeof module === 'object')
+        module.exports = factory(require("react"));
+    else if(typeof define === 'function' && define.amd)
+        define(["react"], factory);
+    else if(typeof exports === 'object')
+        exports["ReactDnD"] = factory(require("react"));
+    else
+        root["ReactDnD"] = factory(root["React"]);
 })(this, function(__WEBPACK_EXTERNAL_MODULE_2__) {
 ```
 
@@ -131,7 +141,13 @@ See that reference to "ReactDnD"?  That means this package will stick all of its
                 :provides ["react-dnd"]}]
 ```
 
-Now, if we just do something like `(.dropTarget monitor)` the optimizer will crush the `dropTarget`symbol and it won't work.  Instead, we use the [cljs-oops](https://github.com/binaryage/cljs-oops) library: `(ocall dnd-connect "dropTarget")` or like this `(ocall dnd-connect :dropTarget)` Because we are using strings or keywords, the optimizer will not alter this code.  You can use `oget` and `oset` as well for properties.  The library has a bunch of convenience functions and some error checking built in to to make this less error prone.
+Now, if we just do something like `(.dropTarget monitor)` the optimizer will crush the `dropTarget`symbol and it won't work.  Instead, we use the [cljs-oops](https://github.com/binaryage/cljs-oops) library: `(ocall dnd-connect "dropTarget")` or like this `(ocall dnd-connect :dropTarget)` Because we are using strings or keywords, the optimizer will not alter this code.  You can use `oget` and `oset` as well for properties.  The library has a bunch of convenience macros and some error checking built in to to make this less error prone.
+
+That's it.  As long as you consistently use `cljs-oops` when you refer to foreign lib symbols, everything will work.
+
+##### Summary
+
+This technique works, but it requires you to do some investigation to figure out how your library is packaged and how it exports its global object. If the examples are using sophisticated es6 import syntax, that may require some translation on your part.  You don't get npm module resolution.  You have to keep to a convention when you call javascript code.  But it is still better than messing around with externs, and you may be more comfortable using the standard tool set.
 
 ```clojure
 
