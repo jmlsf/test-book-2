@@ -105,7 +105,37 @@ If you are doing a lot of javascript interop, shadow-cljs is easier, more idioma
 
 ## Normal cljs compiler and cljs-oops
 
-The other technique that avoids the externs and cljsjs friction is to stick with the mainstream compiler and use the `cljs-oops` package 
+The other technique that avoids the externs and cljsjs friction is to stick with the mainstream compiler and use the `cljs-oops` package to access the libraries.  The advantage here is that you don't stray from the herd and your existing tooling will work.  The disadvantage is that it's a little bit clunky in your source code and you have to be diligent never to access javascript objects using the `js/` accessor.
+
+The first step is to find a UMD build of your package.  Typically, you can just `npm install` the package, go to `node_modules,`look inside the `dist` directory, and grab the build from there.  The top of the file should look like this:
+
+```js
+$ head ReactDnD.js
+(function webpackUniversalModuleDefinition(root, factory) {
+	if(typeof exports === 'object' && typeof module === 'object')
+		module.exports = factory(require("react"));
+	else if(typeof define === 'function' && define.amd)
+		define(["react"], factory);
+	else if(typeof exports === 'object')
+		exports["ReactDnD"] = factory(require("react"));
+	else
+		root["ReactDnD"] = factory(root["React"]);
+})(this, function(__WEBPACK_EXTERNAL_MODULE_2__) {
+```
+
+See that reference to "ReactDnD"?  That means this package will stick all of its exports on a global object named `ReactDnD`.  All you need to do now is inform the compiler that you want this included:
+
+```
+:foreign-libs [{:file "resources/lib/ReactDnD.js"
+                :file-min "lib/ReactDnD.min.js"
+                :provides ["react-dnd"]}]
+```
+
+Now, if we just do something like `(.dropTarget monitor)` the optimizer will crush the `dropTarget`symbol and it won't work.  Instead, we use the [cljs-oops](https://github.com/binaryage/cljs-oops) library: `(ocall dnd-connect "dropTarget")` or like this `(ocall dnd-connect :dropTarget)` Because we are using strings or keywords, the optimizer will not alter this code.  You can use `oget` and `oset` as well for properties.  The library has a bunch of convenience functions and some error checking built in to to make this less error prone.
+
+```clojure
+
+```
 
 
 
