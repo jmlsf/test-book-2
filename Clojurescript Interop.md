@@ -6,9 +6,9 @@ An opinionated guide.
 
 Reccommended approaches in decreasing order of developer convenience:
 
-1. Never do any cljs advanced optimizations. Include your libraries using `<script>` tags. Access methods and properties of the javascript library using the `js/` accessor. There are obvious performance downsides to this approach, but it may be all you need.
-2. Replace your lein/cljs build with shadow-cljs. Install your libraries using npm or yarn. Import them directly into your source code. I reccommend this approach if at all possible, but existing projects with complex builds may find this difficult.
-3. Use the normal cljs compiler. Find a UMD build from the npm distribution of your library, or create one using webpack if one does not exist. Import it using `:foreign-libs`. Exclusively use `cljs-oops` to access members and functions. Never use the `js/` accessors.
+1. Never do any cljs advanced optimizations. Include your libraries using `<script>` tags. Access methods and properties of the javascript library using the `js/` accessor. There are obvious performance downsides to this approach, but it may be all you need.  I don't describe this more below, but it is worth mentioning if you are just doing an internal tool or a school project.
+2. Replace your lein/cljs build with shadow-cljs. Install your libraries using npm or yarn. Import them directly into your source code. I recommend this approach if at all possible, but existing projects with complex builds may find this difficult.  More below.
+3. Use the normal cljs compiler. Find a UMD build from the npm distribution of your library, or create one using webpack if one does not exist. Import it using `:foreign-libs`. Exclusively use `cljs-oops` to access members and functions. Never use the `js/` accessors.  More on this below.
 
 Unreccomended approaches:
 
@@ -54,13 +54,13 @@ Use `npm` or `yarn` and install the package normally. Shadow-cljs will look at t
             ["react-dnd" :as react-dnd :refer DropTarget]))
 ```
 
-* Note: the extensions to `ns.`npm modules can be imported using the same string name that you would use if you were doing an `import FlipMove from "react-flip-move"` in javascript. 
+* Note: the extensions to `ns.`npm modules can be imported using the same string name that you would use if you were doing an `import FlipMove from "react-flip-move"` in javascript.
 
 * Note: shadow-cljs supports every conceivable type of es6 import syntax, including default imports. See more [here](https://shadow-cljs.github.io/docs/UsersGuide.html#_using_npm_packages).
 
 ##### Figwheel replacement
 
-With a few line so config, you get hot swap code and a heads up display, just like with figwheel.  Your `shadow-cljs.edn` will look something like this:
+With a few lines of config, you get hot code reloading and a heads up display, just like with figwheel.  Your `shadow-cljs.edn` will look something like this:
 
 ```clojure
 {:source-paths
@@ -80,16 +80,32 @@ With a few line so config, you get hot swap code and a heads up display, just li
         :devtools {:http-root "public"
                    :http-port 3000
                    :http-handler shadow.http.push-state/handle
-                   :after-load seekeasy.core/reload}
-        :js-options {:resolve {"react-flip-move"
-                                {:target :npm
-                                 :require "react-flip-move/dist/react-flip-move.es"}}}}}
+                   :after-load seekeasy.core/reload}}}
 ```
 
 A few pointers:
 
 1. The `:devtools` section sets up the equivalent of figwheel. Note the `:after-load` entry point: this is what shadow-cljs will call when it hot reloads new code. Typically, you will just remount the root element in your reagent project, or the equivalent if you are using a different library. Shadow-cljs gives you other hooks so that you can do things such as restarting webworkers.  Either clone or poke around [this repo](https://github.com/lauritzsh/reagent-shadow-cljs-starter) for an example.
-2. Some npm modules ship with more than one way to consume it. In the above file I have shown how to consume `react-flip-move` using the es6 module distribution.
+
+##### Rough spots
+
+Shadow-cljs still isn't 100% perfect on all modules.  Occasionally you have to give it a hint as to which file in the distribution it should use.  For example, if you want to use the es6 style import statements with the `react-flip-move` package, you need to tell shadow-cljs which of the handful of distributions it ships with to use:
+
+```
+:js-options {:resolve {"react-flip-move"
+                                {:target :npm
+                                 :require "react-flip-move/dist/react-flip-move.es"}}}}}
+```
+
+In at least one case, the `ns` extensions will break tooling that depends on parsing those forms \(in my case, using `joker` as a linter\).  You can usually rewrite the `ns` forms in such a was as to avoid the extensions \(such as using symbols instead of strings\).
+
+##### Summary
+
+If you are doing a lot of javascript interop, shadow-cljs is easier, more idiomatic for javascript libraries, and it is well supported.  Come by \#shadow-cljs in slack if you have issues.
+
+## Normal cljs compiler and cljs-oops
+
+The other technique that avoids the externs and cljsjs friction is to stick with the mainstream compiler and use the `cljs-oops` package 
 
 
 
