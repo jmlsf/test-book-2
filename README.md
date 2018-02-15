@@ -1,6 +1,6 @@
 # Importing a JavaScript Module into ClojureScript
 
-An opinionated guide.
+My thoughts to date on how best to do this.
 
 ## Executive summary
 
