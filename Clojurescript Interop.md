@@ -4,19 +4,17 @@ An opinionated guide.
 
 ## Executive summary
 
-Reccommended approaches in decreasing order of developer convenience:
+Recommended approaches in decreasing order of developer convenience:
 
 1. Replace your lein/cljs build with shadow-cljs. Install your libraries using npm or yarn. Import them directly into your source code. I recommend this approach if at all possible, but existing projects with complex builds may find this difficult.  More below.
 2. Use the normal cljs compiler. Find a UMD build from the npm distribution of your library, or create one using webpack if one does not exist. Import it using `:foreign-libs`. Exclusively use `cljs-oops` to access members and functions. Never use the `js/` accessors.  More on this below.
 
-Unreccomended approaches:
+Other approaches \(not recommended\):
 
 1. Use the normal cljs compiler. Hope that a `cljsjs` version of your library exists and use it like a normal cljs library. Hope the author wrapped it properly. Hope they do an update when a new version comes out. If not, create your own externs file either manually or with the automatic externs tool. Be a nice person and submit a pull request to the cljsjs project.
 2. Use the `:npm-deps` feature of the cljs compiler. I used it once. It broke with a perplexing error message. There was no way to debug it and nobody on slack ever seems to have answers about it. Although the documentation is clear that this feature is not expected to work all the time, it doesn't say when that might happen or what you are supposed to do about it.
 
-Side note:
-
-Are you just doing an internal tool or a learning project?  Then stop reading this guide.  Just never do any cljs advanced optimizations. Include your libraries using `<script>` tags. Access methods and properties of the javascript library using the `js/` accessor. There are obvious performance downsides to this approach, but it is all you need.
+_Side note:  Are you just doing an internal tool or a learning project?  Then stop reading this guide.  Just never do any cljs advanced optimizations. Include your libraries using `<script>` tags. Access methods and properties of the javascript library using the `js/` accessor. There are obvious performance downsides to this approach, but it is all you need._
 
 ## The problem we are trying to solve
 
