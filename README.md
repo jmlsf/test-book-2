@@ -20,11 +20,14 @@ _Side note:  Are you just doing an internal tool or a learning project?  Then st
 
 In advanced optimization mode, the Google Closure Compiler alters symbols in javascript code in order to get maximum minification. This is apparently important because the generated cljs code creates incredibly long function names.
 
-Here's the problem. If you access a javascript library like this: `js/LibraryObject.method`, Closure Compiler will come around an minify those symbols and then you'll get a runtime error message like "Cannot read property 'q29' of null". Why? Because Closure Compiler doesn't optimize the external library but it _does_ optimize the cljs code. \(Note, theoretically some javascript libraries are safe to be run through closure advanced optimizations, but in practice, it seems like virtually nothing you'll want to use is.\)
+Here's the problem. If you access a javascript library like this: `(.method LibraryObject),` Closure Compiler will come around an minify the `method` symbol and then you'll get a runtime error message like "Cannot read property 'q29' of null". Why? Because Closure Compiler doesn't optimize the external library but it _does_ optimize the cljs code. 
+
+1. Note: theoretically some javascript libraries are safe to be run through closure advanced optimizations, but in practice, it seems like virtually nothing you'll want to use is.
+2. Note: automated e
 
 ### The "externs" file and cljsjs
 
-The traditional solution is to create an "externs" file that contain symbols the Closure Compiler should _not_ alter. Note, this affects compilation not of the external library, but of the cljs code. \(This was initially confusing to me because the externs feel "attached" to the foreign library.\) So when you write `js/LibraryObject.method`, the `LibaryObject.method` symbol in the compiled cljs code will remain untouched by the advanced optimizer, provided that it is properly declared in the extern files.
+The traditional solution is to create an "externs" file that contain symbols the Closure Compiler should _not_ alter. Note, this affects compilation not of the external library, but of the cljs code. \(This was initially confusing to me because the externs feel "attached" to the foreign library.\) So when you write `js/LibraryObject.method`, the `LibaryObject.method` symbol in the compiled cljs code will remain untouched by the advanced optimizer, provided that it is properly declared in the extern files. There is a feature called 
 
 The [cljsjs project](https://github.com/cljsjs/packages) has a bunch of libraries that other people have created externs for. These packages also contain `deps.cljs` files, which are little pieces of metadata that instruct the compiler how to load the javascript code and enable you to use a normal namespace when accessing the library \(e.g. `react/createElement`\).
 
@@ -32,15 +35,17 @@ Problem: what if your library isn't there? What if it is there but it's the wron
 
 ## Shadow-cljs
 
-[Shadow-cljs](https://shadow-cljs.github.io/docs/UsersGuide.html) is a fork of the main cljs-compiler adds some dependency management and other conveniences.  With it, you can install modules using `npm` or `yarn` and use them as is. It is primarily a build tool, so aside from some extensions to the `ns` form, it doesn't impact your code. It accepts a strict superset of cljs code.
+[Shadow-cljs](https://shadow-cljs.github.io/docs/UsersGuide.html) augments the main cljs-compiler with some dependency management, much improved npm module integration, simpler configuration, better defaults, and other conveniences.  With it, you can install modules using `npm` or `yarn` and use them as is. It is primarily a build tool, so aside from some extensions to the `ns` form, it doesn't impact your code. It accepts a strict superset of cljs code.
 
 Shadow-cljs will replace:
 
-1. The cljs compiler
+1. The cljs compiler \(although it still uses the cljs-compiler under the hood\)
 2. The dependency management portion of lein/boot
-3. Figwheel
+3. Figwheel \(although you can still use figwheel if you prefer\)
 
 You can still use lein and boot if your build is more complicated \(like maybe if you have a css preprocessor step\), but for simple projects you don't need them.
+
+Shadow-cljs makes npm module integration work better by actually examining the source code of the modules and generating externs in addition to turning the cljs extern inference feature on.
 
 #### Quick taste
 
