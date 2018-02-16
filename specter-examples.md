@@ -11,7 +11,7 @@ Punch keys into map:
 ```
 boot.user=> (def x [{:a {}} {:a {:b {:c -13}}}])
 #'boot.user/x
-boot.user=> (transform [ALL (keypath :a :b :c)] (fn [elt] 42) x)
+boot.user=> (setval [ALL (keypath :a :b :c)] 42 x)
 [{:a {:b {:c 42}}} {:a {:b {:c 42}}}]
 ```
 
