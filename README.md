@@ -16,16 +16,53 @@ Other approaches \(not recommended\):
 
 _Side note:  Are you just doing an internal tool or a learning project?  Then stop reading this guide.  Just never do any cljs advanced optimizations. Include your libraries using _`<script>`_ tags. Access methods and properties of the javascript library using the _`js/`_ accessor. There are obvious performance downsides to this approach, but it is all you need._
 
-## The problem we are trying to solve
+## The problems we are trying to solve
+
+1. Accessing JavaScript from ClojureScript
+2. Making code save for advanced optimization
+3. Packaging the code for delivery to browser
+
+### Problem 1: Accessing Javascript from ClojureScript
+
+The simplest mechanism to access a JavaScript library is to access it via the library's global object.  Before modern module syntax, libraries worked by setting a bunch of properties on a global object.  When you included the library using a normal `<script>` tag, the library would set that global object once it was loaded.  Most libraries come with at least one UMD distribution already \(usually in the /dist directory of their node\_modules installation--you can also pull one off of a site like unpkg\).  The top of it looks something like this:
+
+```
+$ head ReactDnD.js
+(function webpackUniversalModuleDefinition(root, factory) {
+	if(typeof exports === 'object' && typeof module === 'object')
+		module.exports = factory(require("react"));
+	else if(typeof define === 'function' && define.amd)
+		define(["react"], factory);
+	else if(typeof exports === 'object')
+		exports["ReactDnD"] = factory(require("react"));
+	else
+		root["ReactDnD"] = factory(root["React"]);
+})(this, function(__WEBPACK_EXTERNAL_MODULE_2__) {
+```
+
+This hideous code is here to ascertain what environment it is in \(node, AMD, or browswer\) and to install a global object appropriately.  When called inside a `<script>`tag, it will take the last else clause and `root` will be passed in as `window`.  So you can access this library using an object called `ReactDnD`.
+
+You can do this in ClojureScript too, and just access the object using `js/ReactDnD`.  
+
+Problems:
+
+1. To translate from es6-style import syntax, you really need to understand what is going on under the covers
+2. You will ship a lot of code to the browser and each library will make a round trip to the server
+
+_Note, with shadow-cljs you import libraries using a real namespace with a syntax that is much more one-to-one with es6 syntax \(described below\)._
+
+### Problem 2: Making code safe for advanced optimization
 
 In advanced optimization mode, the Google Closure Compiler alters symbols in javascript code in order to get maximum minification. This is apparently important because the generated cljs code creates incredibly long function names.
 
 Here's the problem. If you access a javascript library like this: `(.method LibraryObject),` Closure Compiler will come around an minify the `method` symbol and then you'll get a runtime error message like "Cannot read property 'q29' of null". Why? Because Closure Compiler doesn't optimize the external library but it _does_ optimize the cljs code.
 
-1. Note: theoretically some javascript libraries are safe to be run through closure advanced optimizations, but in practice, it seems like virtually nothing you'll want to use is.
-2. Note: automated e
+Notes:
 
-### The "externs" file and cljsjs
+1. Theoretically some javascript libraries are safe to be run through closure advanced optimizations, but in practice, it seems like virtually nothing you'll want to use is.
+2. Automated externs inference in the compiler can be turned on and will solve some of this problem.  But it can't do it for everything.  You can set the `:externs-inference true`to turn it on and set `*warn-on-infer*` on a per-file basis to have it tell you where you need to provide type hints.  Externs inference is turned on by default in `shadow-cljs`.
+
+The "externs" file and cljsjs
 
 The traditional solution is to create an "externs" file that contain symbols the Closure Compiler should _not_ alter. Note, this affects compilation not of the external library, but of the cljs code. \(This was initially confusing to me because the externs feel "attached" to the foreign library.\) So when you write `js/LibraryObject.method`, the `LibaryObject.method` symbol in the compiled cljs code will remain untouched by the advanced optimizer, provided that it is properly declared in the extern files. Note, the cljs compiler has a feature called automated externs inference now, which, when turned on, will automatically avoid changing simple examples like this, but there are other instances where it cannot make the inference, so we have the same problem.
 
@@ -121,23 +158,9 @@ If you are doing a lot of javascript interop, shadow-cljs is easier, more idioma
 
 The other technique that avoids the externs and cljsjs friction is to stick with the mainstream compiler and use the `cljs-oops` package to access the libraries.  The advantage here is that you don't stray from the herd and your existing tooling will work.  The disadvantage is that it's a little bit clunky in your source code and you have to be diligent never to access javascript objects using the `js/` accessor.
 
-The first step is to find a UMD build of your package.  Typically, you can just `npm install` the package, go to `node_modules,`look inside the `dist` directory, and grab the build from there.  The top of the file should look like this:
+The first step is to find a UMD build of your package.  Typically, you can just `npm install` the package, go to `node_modules,`look inside the `dist` directory, and grab the build from there.  The top of the file should look like the UMD example shown above.
 
-```js
-$ head ReactDnD.js
-(function webpackUniversalModuleDefinition(root, factory) {
-    if(typeof exports === 'object' && typeof module === 'object')
-        module.exports = factory(require("react"));
-    else if(typeof define === 'function' && define.amd)
-        define(["react"], factory);
-    else if(typeof exports === 'object')
-        exports["ReactDnD"] = factory(require("react"));
-    else
-        root["ReactDnD"] = factory(root["React"]);
-})(this, function(__WEBPACK_EXTERNAL_MODULE_2__) {
-```
-
-See that reference to "ReactDnD"?  That means this package will stick all of its exports on a global object named `ReactDnD`.  All you need to do now is inform the compiler that you want this included:
+Using that example, all you need to do now is inform the compiler that you want this included:
 
 ```
 :foreign-libs [{:file "resources/lib/ReactDnD.js"
@@ -145,7 +168,7 @@ See that reference to "ReactDnD"?  That means this package will stick all of its
                 :provides ["react-dnd"]}]
 ```
 
-Now, if we just do something like `(.dropTarget monitor)` the optimizer will crush the `dropTarget`symbol and it won't work.  Instead, we use the [cljs-oops](https://github.com/binaryage/cljs-oops) library: `(ocall dnd-connect "dropTarget")` or like this `(ocall dnd-connect :dropTarget)` Because we are using strings or keywords, the optimizer will not alter this code.  You can use `oget` and `oset` as well for properties.  The library has a bunch of convenience macros and some error checking built in to to make this less error prone.
+Now, if we just do something like `(.dropTarget monitor)` the optimizer might alter the `dropTarget`symbol and you'll get a runtime error in production.  Instead, we use the [cljs-oops](https://github.com/binaryage/cljs-oops) library: `(ocall dnd-connect "dropTarget")` or like this `(ocall dnd-connect :dropTarget)` Because we are using strings or keywords, the optimizer will not alter this code.  You can use `oget` and `oset` as well for properties.  The library has a bunch of convenience macros and some error checking built in to to make this less error prone.
 
 That's it.  As long as you consistently use `cljs-oops` when you refer to foreign lib symbols, everything will work.
 
